@@ -28,4 +28,12 @@ async function runTraining() {
   console.log("\n🎉 Training complete! Check Supabase for all results.");
 }
 
-runTraining();
+async function loop() {
+  while (true) {
+    await runTraining();
+    console.log("\n🔄 Starting next round...");
+    await new Promise((resolve) => setTimeout(resolve, 5000));
+  }
+}
+
+loop();
