@@ -56,13 +56,14 @@ async function callGroq(prompt, systemPrompt, model = "llama-3.1-8b-instant") {
 }
 
 // ===== GET WIN COUNT =====
-async function getWinCount(model) {
-  const { data } = await supabase
+async function updateWinCount(model) {
+  const current = await getWinCount(model);
+  console.log(`Updating win count for ${model}, current: ${current}`);
+  const { error } = await supabase
     .from("win_counts")
-    .select("wins")
-    .eq("model", model)
-    .single();
-  return data?.wins || 0;
+    .upsert({ model, wins: current + 1 }, { onConflict: "model" });
+  if (error) console.error("Win count update error:", error);
+  return current + 1;
 }
 
 // ===== UPDATE WIN COUNT =====
