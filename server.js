@@ -3,7 +3,7 @@ import express from "express";
 import { createClient } from "@supabase/supabase-js";
 
 const app = express();
-const PORT = 3002;
+const PORT = process.env.PORT || 3002;
 
 app.use(express.json());
 
@@ -12,6 +12,9 @@ const supabase = createClient(
   process.env.SUPABASE_URL,
   process.env.SUPABASE_KEY
 );
+
+// ===== DELAY HELPER =====
+const delay = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
 
 // ===== GROQ AI CALL =====
 async function callGroq(prompt, systemPrompt, model = "llama-3.1-8b-instant") {
@@ -49,6 +52,7 @@ app.post("/train", async (req, res) => {
       `Reply to this customer email: ${test_email}`,
       "You are a helpful e-commerce customer support assistant."
     );
+    await delay(3000);
 
     // Step 2: Competitor AIs generate replies
     const competitor1Reply = await callGroq(
@@ -56,12 +60,14 @@ app.post("/train", async (req, res) => {
       "You are a world class customer support agent. Write the best possible reply.",
       "llama-3.3-70b-versatile"
     );
+    await delay(3000);
 
     const competitor2Reply = await callGroq(
       `Reply to this customer email: ${test_email}`,
       "You are a world class customer support agent. Write the best possible reply.",
       "gemma2-9b-it"
     );
+    await delay(3000);
 
     // Step 3: Judge scores all three replies
     const judgePrompt = `
@@ -93,7 +99,8 @@ Format your response as JSON like this:
 }
 `;
 
-    const judgeResult = await callGroq(judgePrompt, "You are a strict but fair AI judge. Always respond with valid JSON only. No extra text, no markdown, no backticks.");
+    let judgeResult = await callGroq(judgePrompt, "You are a strict but fair AI judge. Always respond with valid JSON only. No extra text, no markdown, no backticks.");
+    judgeResult = judgeResult?.replace(/```json|```/g, "").trim();
 
     // Step 4: Save to Supabase
     const { error } = await supabase.from("training_results").insert({
