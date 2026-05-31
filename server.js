@@ -18,24 +18,34 @@ const delay = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
 
 // ===== GROQ AI CALL =====
 async function callGroq(prompt, systemPrompt, model = "llama-3.1-8b-instant") {
-  const response = await fetch("https://api.groq.com/openai/v1/chat/completions", {
-    method: "POST",
-    headers: {
-      "Content-Type": "application/json",
-      Authorization: `Bearer ${process.env.GROQ_KEY}`,
-    },
-    body: JSON.stringify({
-      model: model,
-      messages: [
-        { role: "system", content: systemPrompt },
-        { role: "user", content: prompt }
-      ],
-      temperature: 0.7,
-    }),
-  });
+  try {
+    const response = await fetch("https://api.groq.com/openai/v1/chat/completions", {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        Authorization: `Bearer ${process.env.GROQ_KEY}`,
+      },
+      body: JSON.stringify({
+        model: model,
+        messages: [
+          { role: "system", content: systemPrompt },
+          { role: "user", content: prompt }
+        ],
+        temperature: 0.7,
+      }),
+    });
 
-  const data = await response.json();
-  return data?.choices?.[0]?.message?.content;
+    const data = await response.json();
+    const reply = data?.choices?.[0]?.message?.content;
+    if (!reply) {
+      console.error(`Model ${model} returned null. Error:`, data);
+      return `[Model ${model} failed to respond]`;
+    }
+    return reply;
+  } catch (err) {
+    console.error(`Model ${model} crashed:`, err);
+    return `[Model ${model} crashed]`;
+  }
 }
 
 // ===== TRAINING ROUTE =====
