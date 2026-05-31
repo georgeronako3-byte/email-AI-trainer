@@ -22,7 +22,7 @@ async function runTraining() {
     }
 
     // Wait 2 seconds between each email to avoid rate limits
-    await new Promise((resolve) => setTimeout(resolve, 1000));
+    await new Promise((resolve) => setTimeout(resolve, 2000));
   }
 
   console.log("\n🎉 Training complete! Check Supabase for all results.");
