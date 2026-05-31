@@ -13,6 +13,13 @@ const supabase = createClient(
   process.env.SUPABASE_KEY
 );
 
+// ===== COMPETITOR MODEL TIERS =====
+const competitorTiers = [
+  { b: "llama-3.3-70b-versatile", c: "gemma2-9b-it" },
+  { b: "llama-3.3-70b-versatile", c: "llama3-70b-8192" },
+  { b: "llama3-70b-8192", c: "llama-3.3-70b-versatile" },
+];
+
 // ===== DELAY HELPER =====
 const delay = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
 
@@ -48,6 +55,47 @@ async function callGroq(prompt, systemPrompt, model = "llama-3.1-8b-instant") {
   }
 }
 
+// ===== GET WIN COUNT =====
+async function getWinCount(model) {
+  const { data } = await supabase
+    .from("win_counts")
+    .select("wins")
+    .eq("model", model)
+    .single();
+  return data?.wins || 0;
+}
+
+// ===== UPDATE WIN COUNT =====
+async function updateWinCount(model) {
+  const current = await getWinCount(model);
+  await supabase
+    .from("win_counts")
+    .upsert({ model, wins: current + 1 }, { onConflict: "model" });
+  return current + 1;
+}
+
+// ===== GET CURRENT TIER =====
+async function getCurrentTier() {
+  const wins = await getWinCount("A");
+  const tierIndex = Math.min(Math.floor(wins / 20), competitorTiers.length - 1);
+  return competitorTiers[tierIndex];
+}
+
+// ===== SAVE PROMPT MEMORY =====
+async function saveMemory(type, email, reply, feedback) {
+  await supabase.from("prompt_memory").insert({ type, email, reply, feedback });
+}
+
+// ===== GET RECENT MEMORIES =====
+async function getRecentMemories() {
+  const { data } = await supabase
+    .from("prompt_memory")
+    .select("*")
+    .order("id", { ascending: false })
+    .limit(5);
+  return data || [];
+}
+
 // ===== TRAINING ROUTE =====
 app.post("/train", async (req, res) => {
   try {
@@ -57,10 +105,23 @@ app.post("/train", async (req, res) => {
       return res.status(400).json({ error: "Missing test email" });
     }
 
+    // Get current competitor tier
+    const tier = await getCurrentTier();
+    console.log(`Using competitors: B=${tier.b}, C=${tier.c}`);
+
+    // Get recent memories to improve A's prompt
+    const memories = await getRecentMemories();
+    let memoryContext = "";
+    if (memories.length > 0) {
+      const rewards = memories.filter(m => m.type === "reward").map(m => `Good example: ${m.reply}`).join("\n");
+      const punishments = memories.filter(m => m.type === "punishment").map(m => `Avoid this: ${m.feedback}`).join("\n");
+      memoryContext = `\n\nPAST FEEDBACK:\n${rewards}\n${punishments}`;
+    }
+
     // Step 1: Your AI generates a reply
     const yourReply = await callGroq(
       `Reply to this customer email: ${test_email}`,
-      "You are a helpful e-commerce customer support assistant."
+      `You are a helpful e-commerce customer support assistant.${memoryContext}`
     );
     await delay(3000);
 
@@ -68,14 +129,14 @@ app.post("/train", async (req, res) => {
     const competitor1Reply = await callGroq(
       `Reply to this customer email: ${test_email}`,
       "You are a world class customer support agent. Write the best possible reply.",
-      "llama-3.3-70b-versatile"
+      tier.b
     );
     await delay(3000);
 
     const competitor2Reply = await callGroq(
       `Reply to this customer email: ${test_email}`,
       "You are a world class customer support agent. Write the best possible reply.",
-      "gemma2-9b-it"
+      tier.c
     );
     await delay(3000);
 
@@ -112,14 +173,39 @@ Format your response as JSON like this:
     let judgeResult = await callGroq(judgePrompt, "You are a strict but fair AI judge. Always respond with valid JSON only. No extra text, no markdown, no backticks.");
     judgeResult = judgeResult?.replace(/```json|```/g, "").trim();
 
-    // Step 4: Save to Supabase
+    // Step 4: Parse judge result and update win counts
+    let winner = "unknown";
+    let reasoning = "";
+    try {
+      const parsed = JSON.parse(judgeResult);
+      winner = parsed.winner;
+      reasoning = parsed.reasoning;
+    } catch (e) {
+      console.error("Could not parse judge result:", judgeResult);
+    }
+
+    // Update win count and save memory
+    if (winner === "A") {
+      const newWins = await updateWinCount("A");
+      await saveMemory("reward", test_email, yourReply, reasoning);
+      console.log(`✅ A won! Total A wins: ${newWins}`);
+      if (newWins % 20 === 0) {
+        console.log(`🔥 A hit ${newWins} wins! Competitors upgrading to harder tier!`);
+      }
+    } else {
+      await updateWinCount(winner === "B" ? "B" : "C");
+      await saveMemory("punishment", test_email, yourReply, `A lost to ${winner}. Reason: ${reasoning}`);
+      console.log(`❌ A lost to ${winner}. Saving feedback.`);
+    }
+
+    // Step 5: Save to Supabase
     const { error } = await supabase.from("training_results").insert({
       test_email,
       your_ai_reply: yourReply,
       openai_reply: competitor1Reply,
       gemini_reply: competitor2Reply,
       judge_scores: judgeResult,
-      winner: "TBD",
+      winner,
     });
 
     if (error) throw error;
@@ -128,6 +214,7 @@ Format your response as JSON like this:
       your_reply: yourReply,
       competitor_reply: competitor1Reply,
       judge: judgeResult,
+      winner,
     });
 
   } catch (err) {
