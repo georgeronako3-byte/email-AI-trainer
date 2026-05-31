@@ -8,7 +8,7 @@ async function runTraining() {
     console.log(`\nRunning email ${i + 1} of ${testEmails.length}...`);
 
     try {
-      const response = await fetch("http://localhost:3002/train", {
+      const response = await fetch("https://email-ai-trainer.onrender.com", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ test_email: email }),
