@@ -15,11 +15,10 @@ const supabase = createClient(
 
 // ===== COMPETITOR MODEL TIERS =====
 const competitorTiers = [
-  { b: "llama-3.3-70b-versatile", c: "gemma2-9b-it" },
-  { b: "llama-3.3-70b-versatile", c: "llama3-70b-8192" },
-  { b: "llama3-70b-8192", c: "llama-3.3-70b-versatile" },
+  { b: "llama-3.3-70b-versatile", c: "openai/gpt-oss-120b" },
+  { b: "openai/gpt-oss-120b", c: "llama-3.3-70b-versatile" },
+  { b: "openai/gpt-oss-120b", c: "llama-3.3-70b-versatile" },
 ];
-
 // ===== DELAY HELPER =====
 const delay = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
 
@@ -56,16 +55,16 @@ async function callGroq(prompt, systemPrompt, model = "llama-3.1-8b-instant") {
 }
 
 // ===== GET WIN COUNT =====
-async function updateWinCount(model) {
-  const current = await getWinCount(model);
-  console.log(`Updating win count for ${model}, current: ${current}`);
-  const { error } = await supabase
+async function getWinCount(model) {
+  const { data, error } = await supabase
     .from("win_counts")
-    .upsert({ model, wins: current + 1 }, { onConflict: "model" });
-  if (error) console.error("Win count update error:", error);
-  return current + 1;
+    .select("wins")
+    .eq("model", model)
+    .single();
+  if (error) console.error("getWinCount error:", error);
+  console.log(`Win count for ${model}:`, data?.wins);
+  return data?.wins ?? 0;
 }
-
 // ===== UPDATE WIN COUNT =====
 async function updateWinCount(model) {
   const current = await getWinCount(model);
