@@ -1,6 +1,7 @@
 import "dotenv/config";
 import express from "express";
 import { createClient } from "@supabase/supabase-js";
+import { businesses } from "./businesses.js";
 
 const app = express();
 const PORT = process.env.PORT || 3002;
@@ -101,6 +102,10 @@ app.post("/train", async (req, res) => {
   try {
     const { test_email } = req.body;
 
+    // Pick a random business
+const business = businesses[Math.floor(Math.random() * businesses.length)];
+console.log(`Using business: ${business.shopName}`);
+
     if (!test_email) {
       return res.status(400).json({ error: "Missing test email" });
     }
@@ -121,8 +126,15 @@ app.post("/train", async (req, res) => {
     // Step 1: Your AI generates a reply
     const yourReply = await callGroq(
       `Reply to this customer email: ${test_email}`,
-      `You are a helpful e-commerce customer support assistant.${memoryContext}`
+      `You are a helpful customer support assistant for ${business.shopName}.
+    Business Category: ${business.category}
+    Business Hours: ${business.hours}
+    Return Policy: ${business.returnPolicy}
+    Shipping Policy: ${business.shippingPolicy}
+    Products: ${business.products}
+    ${memoryContext}`
     );
+    
     await delay(3000);
 
     // Step 2: Competitor AIs generate replies
