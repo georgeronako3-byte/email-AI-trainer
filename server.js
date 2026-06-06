@@ -134,8 +134,8 @@ console.log(`Using business: ${business.shopName}`);
     Products: ${business.products}
     ${memoryContext}`
     );
-    
-    await delay(3000);
+
+    await delay(5000);
 
     // Step 2: Competitor AIs generate replies
     const competitor1Reply = await callGroq(
@@ -143,14 +143,14 @@ console.log(`Using business: ${business.shopName}`);
       "You are a world class customer support agent. Write the best possible reply.",
       tier.b
     );
-    await delay(3000);
+    await delay(5000);
 
     const competitor2Reply = await callGroq(
       `Reply to this customer email: ${test_email}`,
       "You are a world class customer support agent. Write the best possible reply.",
       tier.c
     );
-    await delay(3000);
+    await delay(5000);
 
     // Step 3: Judge scores all three replies
     const judgePrompt = `
